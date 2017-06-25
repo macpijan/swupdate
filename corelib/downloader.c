@@ -56,12 +56,15 @@
 
 #define DL_DEFAULT_RETRIES	3
 
+#define DL_DEFAULT_KEY	"$HOME/.ssh/id_dsa"
+
 static int cnt = 0;
 
 struct dwl_options {
 	char *url;
 	unsigned int retries;
 	unsigned int timeout;
+	char *key;
 };
 
 /* notify download progress each second */
@@ -76,6 +79,7 @@ static struct option long_options[] = {
     {"url", required_argument, NULL, 'u'},
     {"retries", required_argument, NULL, 'r'},
     {"timeout", required_argument, NULL, 't'},
+    {"key", required_argument, NULL, 'k'},
     {NULL, 0, NULL, 0}};
 
 
@@ -200,7 +204,7 @@ static void set_option_common(CURL *curl_handle,
  * for that, the -i option is used.
  */
 static RECOVERY_STATUS download_from_url(char *image_url, unsigned int retries,
-					unsigned long lowspeed_time)
+					unsigned long lowspeed_time, char *key)
 {
 	CURL *curl_handle;
 	CURLcode res = CURLE_GOT_NOTHING;
@@ -251,6 +255,18 @@ static RECOVERY_STATUS download_from_url(char *image_url, unsigned int retries,
 	if (curl_easy_setopt(curl_handle, CURLOPT_URL, image_url) != CURLE_OK) {
 		TRACE("Runs out of memory: serious internal error");
 		return FAILURE;
+	}
+
+	/* Set private key path*/
+	/* Leave curl default behavior if no key is given */
+	TRACE("key = %s", key);
+	if (key && strlen(key)) {
+		TRACE("key -ne NULLL");
+		if (curl_easy_setopt(curl_handle, CURLOPT_SSH_PRIVATE_KEYFILE,
+			key) != CURLE_OK) {
+			TRACE("Runs out of memory: serious internal error");
+			return FAILURE;
+		}
 	}
 
 	curl_easy_setopt(curl_handle, CURLOPT_WRITEFUNCTION, write_data);
@@ -318,6 +334,8 @@ static int download_settings(void *elem, void  __attribute__ ((__unused__)) *dat
 		&opt->retries);
 	get_field(LIBCFG_PARSER, elem, "timeout",
 		&opt->timeout);
+	get_field(LIBCFG_PARSER, elem, "key",
+		&opt->key);
 
 	return 0;
 }
@@ -330,8 +348,10 @@ void download_print_help(void)
 	    "\t  -u, --url <url>   * <url> is a link to the .swu update image\n"
 	    "\t  -r, --retries       number of retries (resumed download) if connection\n"
 	    "\t                      is broken (0 means indefinitely retries) (default: %d)\n"
-	    "\t  -t, --timeout       timeout to check if a connection is lost (default: %d)\n",
-	    DL_DEFAULT_RETRIES, DL_LOWSPEED_TIME);
+	    "\t  -t, --timeout       timeout to check if a connection is lost (default: %d)\n"
+	    "\t  -k, --key           path to private key (sftp / ssh authorization) (default %s)\n",
+	    DL_DEFAULT_RETRIES, DL_LOWSPEED_TIME, DL_DEFAULT_KEY);
+
 }
 
 int start_download(const char *fname, int argc, char *argv[])
@@ -353,7 +373,7 @@ int start_download(const char *fname, int argc, char *argv[])
 
 	/* reset to optind=1 to parse download's argument vector */
 	optind = 1;
-	while ((choice = getopt_long(argc, argv, "t:u:r:",
+	while ((choice = getopt_long(argc, argv, "t:u:r:k:",
 				     long_options, NULL)) != -1) {
 		switch (choice) {
 		case 't':
@@ -364,6 +384,9 @@ int start_download(const char *fname, int argc, char *argv[])
 			break;
 		case 'r':
 			options.retries = strtoul(optarg, NULL, 10);
+			break;
+		case 'k':
+			SETSTRING(options.key, optarg);
 			break;
 		case '?':
 		default:
@@ -379,7 +402,7 @@ int start_download(const char *fname, int argc, char *argv[])
 	 */
 	for (attempt = 0;; attempt++) {
 		result = download_from_url(options.url, options.retries,
-						options.timeout);
+						options.timeout, options.key);
 		if (result != FAILURE)
 			break;
 

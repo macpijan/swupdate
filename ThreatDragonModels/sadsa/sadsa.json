@@ -1,0 +1,18 @@
+{
+  "summary": {
+    "description": "asd",
+    "owner": "ddasd",
+    "title": "sadsa"
+  },
+  "detail": {
+    "contributors": [],
+    "diagrams": [
+      {
+        "title": "123",
+        "thumbnail": "./public/content/images/thumbnail.jpg",
+        "id": 0
+      }
+    ],
+    "reviewer": "a"
+  }
+}
